@@ -1,4 +1,6 @@
 # ESS_ControllerHA
+![ess_controller](_images/icon.png)
+
 The **ESS controller** is a target soc calculator for **Home Assistant**. It is a custom component that uses data from different sources to perform hourly scheduling of the system's battery SoC, so that the cost of purchasing energy from the grid is minimal. To do this, it obtains historical data from **InfluxDB** about the home consumption, actual solar production and the historical predictions obtained from **Forecast.Solar**.
 Using the **Prophet** library, it generates demand forecasts for the next few hours.
 The electricity purchase and sale prices are obtained from the official **ESIOS** component (Spain electricity hourly price PVPC), so for the moment, the component is only useful for the Spanish territory.

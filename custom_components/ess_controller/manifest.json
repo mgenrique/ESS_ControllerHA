@@ -1,0 +1,11 @@
+{
+  "domain": "ess_controller",
+  "name": "ESS Controller",
+  "version": "1.0",
+  "config_flow": true,
+  "documentation": "https://www.example.com",
+  "dependencies": ["pvpc_hourly_pricing", "forecast_solar"], 
+  "codeowners": ["@mgenrique"],
+  "requirements": ["prophet", "pulp"],
+  "logo": "https://github.com/mgenrique/info_development_environment/raw/main/images/logo.png"
+}

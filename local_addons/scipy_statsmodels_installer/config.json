@@ -1,0 +1,12 @@
+{
+  "name": "SciPy and StatsModels Installer",
+  "version": "1.1",
+  "slug": "scipy_statsmodels_installer",
+  "description": "Installs SciPy and StatsModels in Home Assistant Core",
+  "arch": ["aarch64", "armv7", "armhf", "amd64", "i386"],
+  "startup": "application",
+  "boot": "manual",
+  "options": {},
+  "schema": {},
+  "host_network": true
+}

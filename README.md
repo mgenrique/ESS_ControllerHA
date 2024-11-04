@@ -13,3 +13,34 @@ With all the above information, the software coordinates all the information sou
 The final result is a SoC schedule that the system must try to follow.
 
 With this information, the Modbus connection with the inverter is used to maintain the grid set point that allows the calculated SoC to be reached.
+
+## Important information for installation
+The first version of this component has been developed in Ubuntu on a Home Assistant Core installation running in a Python 3.12 virtual environment.
+In Ubuntu the Prophet library is not a problem since it is possible to install it. However in Home Assistant OS, it is not possible to have this library since the OS is a minimal system based on Alpine.
+In order for the component to be more general-purpose, Prophet has had to be abandoned and the `statsmodels` library is used instead. This library is not part of HA OS, so it is necessary to install it before being able to use the custom component.
+In manifest.json the requirement for `statsmodels` is omitted so that the system does not try to install it, so only the line remains:
+```json
+"requirements": ["pulp"]
+```
+However, for an installation on a different operating system, the following should be included:
+```json
+"requirements": ["pulp", "statsmodels"]
+```
+or in the case of wanting to use Prophet (only if not HA OS)
+```
+"requirements": ["pulp", "prophet"]
+```
+
+If you don't have `statsmodels` yet in Home Assistant OS, you can get it by installing the Addon from the repository
+https://github.com/mgenrique/HassOS_scipy_statsmodels_installer
+
+To do this, in the HA UI, go to `Settings` --> `Addons` --> `Addon Store`.
+
+In the button with the 3 dots, select Repositories and add it.
+
+This will make the addon appear in the UI under `HassOS_scipy_statsmodels_installer` and you can install it.
+
+This Addon will only run once and its only mission is to install the `statsmodels` library from the Alpine packages at:
+https://pkgs.alpinelinux.org/package/edge/community/x86/py3-statsmodels
+
+

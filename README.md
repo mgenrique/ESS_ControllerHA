@@ -49,4 +49,6 @@ The component is still in very early development stage. Use at your own risk.
 
 In the future, solutions will be explored to make `FB Prophet` the tool in charge of making estimates for all types of installations. For the moment, users who install it on HA Os will at least get reasonable estimates using `statsmodels`.
 
-A possible source of inspiration for this task can be found at https://hub.docker.com/r/safakcirag/fbprophet
+A possible source of inspiration for this task can be found at:
+- https://github.com/scirag/fbprophet-docker/tree/master
+- https://hub.docker.com/r/safakcirag/fbprophet

@@ -44,3 +44,9 @@ This Addon will only run once and its only mission is to install the `statsmodel
 https://pkgs.alpinelinux.org/package/edge/community/x86/py3-statsmodels
 
 
+## TODO:
+The component is still in very early development stage. Use at your own risk.
+
+In the future, solutions will be explored to make `FB Prophet` the tool in charge of making estimates for all types of installations. For the moment, users who install it on HA Os will at least get reasonable estimates using `statsmodels`.
+
+A possible source of inspiration for this task can be found at https://hub.docker.com/r/safakcirag/fbprophet

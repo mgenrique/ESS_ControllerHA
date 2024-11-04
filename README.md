@@ -27,7 +27,7 @@ However, for an installation on a different operating system, the following shou
 "requirements": ["pulp", "statsmodels"]
 ```
 or in the case of wanting to use Prophet (only if not HA OS)
-```
+```json
 "requirements": ["pulp", "prophet"]
 ```
 

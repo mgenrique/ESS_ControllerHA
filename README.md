@@ -36,7 +36,7 @@ https://github.com/mgenrique/HassOS_scipy_statsmodels_installer
 
 To do this, in the HA UI, go to `Settings` --> `Addons` --> `Addon Store`.
 
-In the button with the 3 dots, select Repositories and add it.
+In the button with the 3 dots, select `Repositories` and add it.
 
 This will make the addon appear in the UI under `HassOS_scipy_statsmodels_installer` and you can install it.
 

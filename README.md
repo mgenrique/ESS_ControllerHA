@@ -1,3 +1,6 @@
+# Estado de la rama congelada_v1
+Esta rama se ha creado al finalizar el desarrollo del custom Component ESS Controller en la versión que trabaja internamente con la librería Prophet. Dado que esto limita su uso a equipos que corren directamente Home Assistant core, se abandona este enfoque y se da paso a la siguiente versión en la que el custom component hará uso del Addon Prophet InfluxDB Addon.
+
 # ESS_ControllerHA
 ![ess_controller](_images/icon.png)
 

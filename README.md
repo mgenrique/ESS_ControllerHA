@@ -1,3 +1,6 @@
+# Estado de la rama congelada_v2
+Esta rama se ha creado al finalizar el desarrollo del custom Component ESS Controller en la versión que trabaja con el Addon Prophet InfluxDB Addon. Se van a incorporar nuevas funcionalidades como input numbers en la UI que den alguna libertad de acción al usuario en el día a día, sin depender de parametros tan estáticos como los solicitados en el flujo de configuración.
+
 # ESS_ControllerHA
 ![ess_controller](_images/icon.png)
 

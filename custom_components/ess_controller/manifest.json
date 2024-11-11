@@ -1,0 +1,13 @@
+{
+  "domain": "ess_controller",
+  "name": "ESS Controller",
+  "version": "1.0",
+  "config_flow": true,
+  "documentation": "https://github.com/mgenrique/ESS_ControllerHA/tree/main/README.md",
+  "dependencies": ["pvpc_hourly_pricing", "forecast_solar"], 
+  "codeowners": ["@mgenrique"],
+  "requirements": ["pulp"],
+  "logo": "https://github.com/mgenrique/info_development_environment/raw/main/images/logo.png",
+  "integration_type": "hub",
+  "iot_class": "cloud_polling"
+}

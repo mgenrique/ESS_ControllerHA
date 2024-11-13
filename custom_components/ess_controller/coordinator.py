@@ -490,7 +490,7 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
             return
         
         if self.current_soc >= self.target_soc_current_hour:
-            self.proposed_setpoint_W=0
+            self.proposed_setpoint_W=10
         else:
             # Se pretende evitar comprar a la red hasta que se haga un nuevo calculo de target soc
             # Solo usar target soc recien calculados:

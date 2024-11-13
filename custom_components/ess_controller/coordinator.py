@@ -12,8 +12,9 @@ from homeassistant.helpers.storage import Store
 from homeassistant.const import CONF_NAME
 
 from .api import PVContollerAPI
-from .utils import forecast_solar_api_to_dict, pvpc_raw_to_useful_dict
-from .const import DOMAIN, FORECAST_UPDATE_INTERVAL, COORDINATOR_UPDATE_INTERVAL
+from .utils import forecast_solar_api_to_dict, pvpc_raw_to_useful_dict, async_get_value_from_store
+from .const import DOMAIN, FORECAST_UPDATE_INTERVAL, COORDINATOR_UPDATE_INTERVAL, \
+    STORE_USER_INPUT_GLOBAL_KEY, STORE_FORECAST_SOLAR_GLOBAL_KEY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -34,6 +35,8 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         self.user_min_soc = entry.data["min_soc_percent"]  # In %, the minimum SoC value chosen by the user
         self.enable_fore_to_real_correction = entry.data["enable_fore_to_real_correction"]
         self.sell_allowed = entry.data["sell_allowed"]
+        self.battery_soc_sensor=entry.data["battery_soc_sensor"]
+        self.security_min_soc_sensor=entry.data["battery_min_soc_overrides_sensor"]
 
         self.data = None
         self.buy_prices_rawdata = None
@@ -56,10 +59,14 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         self.target_socs = None
         self.target_soc_current_hour = None
         self.pulp_json_results = None
+        self.pulp_parameters = None
         self.current_soc = None
-        self.current_security_min_soc = None  # In %, the minimum security SoC read from the inverter
-        self.current_min_soc = None  # In %, the minimum SoC to be used in the calculation
+        self.current_security_min_soc = 0  # In %, the minimum security SoC read from inverter
+        self.current_min_soc = None  # In %, the true minimum SoC to be used in the calculation
         self.used_last_target_soc = False
+
+        # The true minimum SoC to be used in the calculation is calculated as the maximum between 
+        # the security SoC and the user SoC with the safety margin applied
 
         # Temporary values of last updates
         self.forecast_solar_last_update = None
@@ -73,13 +80,16 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         self.logger.debug("The coordinator has been initialized")        
 
         # Get the Home Assistant timezone
-        str_hass_timezone = self.hass.config.time_zone
+        str_hass_timezone = self._hass.config.time_zone
         self.str_local_timezone = str_hass_timezone
         self.class_local_timezone = None
         asyncio.create_task(self.set_class_local_timezone(str_hass_timezone))
 
         # Initialize storage for estimated solar production data
-        self.store = Store(hass, version=1, key="PVController_forecast_solar")
+        self.store = Store(hass, version=1, key=STORE_FORECAST_SOLAR_GLOBAL_KEY)
+
+        # Initialize storage for user inputs
+        self.store_user_inputs = Store(hass, version=1, key=STORE_USER_INPUT_GLOBAL_KEY)  
 
         # Initialize aiohttp session
         self._session = aiohttp.ClientSession()
@@ -87,11 +97,15 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         # Number to do cascading force update the predictions and the target SoC
         self.force_updates_step = 0
 
+
+        # Inputs from UI (inputs numbers) updates from store in async_initialize
+        self.soc_safety_margin = 10 # Default value 
+
         # Make public for sensors the set point in calcs
         # Since the period is one hour, the energy changes to power directly.
         self.max_setpoint_W=int(entry.data["max_buy_energy_per_period_Wh"])
         self.proposed_setpoint_W = self.max_setpoint_W
-          
+
         influx_db_pass = None
         if entry.data.get("influx_db_pass", False):
             # For sensitive data, such as the InfluxDB password, it is recommended
@@ -106,8 +120,6 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
             influx_db_database=entry.data["influx_db_database"], 
             acin_to_acout_sensor=entry.data["acin_to_acout_sensor"],
             inverter_to_acout_sensor=entry.data["inverter_to_acout_sensor"],
-            battery_soc_sensor=entry.data["battery_soc_sensor"],
-            battery_min_soc_overrides_sensor=entry.data["battery_min_soc_overrides_sensor"],
             solar_production_sensor=entry.data["solar_production_sensor"],
             hystory_forecast_solar_sensor=entry.data["forecast_solar_entity"],
             battery_capacity_Wh=entry.data["battery_capacity_Wh"],
@@ -116,6 +128,7 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
             max_buy_energy_per_period_Wh=entry.data["max_buy_energy_per_period_Wh"],
             charge_efficiency=entry.data["charge_efficiency"],
             discharge_efficiency=entry.data["discharge_efficiency"],
+            battery_purchase_price= entry.data["battery_purchase_price"],
             str_local_timezone=self.str_local_timezone,
             enable_fore_to_real_correction=self.enable_fore_to_real_correction,
             sell_allowed=self.sell_allowed)     
@@ -129,7 +142,25 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         """Set the local timezone for the class."""
         if str_timezone is None:
             str_timezone = "Europe/Madrid"
-        self.class_local_timezone = await asyncio.to_thread(pytz.timezone, str_timezone) 
+        self.class_local_timezone = await asyncio.to_thread(pytz.timezone, str_timezone)
+
+    async def async_initialize(self):
+        self.soc_safety_margin = await async_get_value_from_store(
+            self.store_user_inputs, "user_soc_safety_margin", 10)
+        
+        
+    async def update_current_min_soc(self):
+        """Update the current minimum SoC value."""
+        if self.security_min_soc_sensor is not None:
+            states=self._hass.states.get(self.security_min_soc_sensor)
+            if states is not None:
+                self.current_security_min_soc = float(states.state)
+        if self.current_security_min_soc is None:
+            self.current_security_min_soc = 0
+        self.current_min_soc = max(self.current_security_min_soc, self.user_min_soc) \
+                            + self.soc_safety_margin
+        await self.api.set_current_min_soc(self.current_min_soc)            
+        self.logger.debug(f"The current MinSoC is: {self.current_min_soc}%")
 
     async def _async_update_data(self) -> int:
         """Update data from various sources."""
@@ -142,6 +173,9 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
 
         # Update the setpoint
         await self.update_proposed_setpoint()
+
+        # Get the current SoC value
+        await self.get_current_soc()
 
         # Get buy prices
         self.buy_prices_rawdata = await self.get_esios_sensor_dict(self.pvpc_buy_entity)      
@@ -201,22 +235,23 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
             self.effective_forecast_solar_useful_dict = self.api.dict_effective_forecast_solar
             self.fore_to_real_dict = self.api.fore_to_real_dict
 
-        # Get the SoC value from the API
-        soc = await self.api.read_soc_from_influxdb()
-        if soc is not None and self.current_soc != soc:
-            # Update the SoC value
-            self.current_soc = soc
-            await self.api.set_current_initial_soc(soc) 
-            self.logger.debug(f"The current SoC is: {self.current_soc}%")
+        # # Get the SoC value from the API
+        # soc = await self.api.read_soc_from_influxdb()
+        # if soc is not None and self.current_soc != soc:
+        #     # Update the SoC value
+        #     self.current_soc = soc
+        #     await self.api.set_current_initial_soc(soc) 
+        #     self.logger.debug(f"The current SoC is: {self.current_soc}%")
 
-        # Get the minSoC value from the API
-        minsoc = await self.api.read_minsoc_from_influxdb()
-        if soc is not None and self.current_security_min_soc != minsoc:
-            # Update the MinSoC value
-            self.current_security_min_soc = minsoc
-            self.current_min_soc = max(self.current_security_min_soc, self.user_min_soc)
-            await self.api.set_current_min_soc(self.current_min_soc)            
-            self.logger.debug(f"The current MinSoC is: {self.current_min_soc}%")            
+        # # Get the Security minSoC value from the API
+        # minsoc = await self.api.read_minsoc_from_influxdb()
+        # if minsoc is not None and self.current_security_min_soc != minsoc:
+        #     # Update the current_security_min_soc value
+        #     self.current_security_min_soc = minsoc
+
+        # Set the true minimum SoC to be used in the calculation
+        await self.update_current_min_soc()
+           
 
         # Make the startup lighter by staggering costly processes
         if self._skip_update == 2:
@@ -243,13 +278,14 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
         # Request the API to calculate target_socs
         if await self.api.make_target_socs(current_datetime, self.force_updates_step == 3):
             if self.force_updates_step == 3:
-                self.logger.debug(f"Force first minute update step: {self.force_updates_step}")
+                self.logger.debug(f"Force make_target_socs, step: {self.force_updates_step}")
                 self.force_updates_step = 4             
             # Update target_socs values
             if self.target_socs != self.api.dict_target_socs:
                 self.target_socs = self.api.dict_target_socs
                 self.target_soc_current_hour = self.api.target_soc_current_hour
                 self.pulp_json_results= self.api.pulp_json_results
+                self.pulp_parameters = self.api.pulp_parameters             
                 self.used_last_target_soc = False
 
         if self.force_updates_step == 4 and current_datetime.minute != 0:
@@ -267,25 +303,38 @@ class PVControllerUpdateCoordinator(DataUpdateCoordinator):
 
     def get_entity_attributes(self, entity_id: str):
         """Return the attributes of a sensor with the given entity_id."""
-        my_sensor = self.hass.states.get(entity_id)
+        my_sensor = self._hass.states.get(entity_id)
         if my_sensor and my_sensor.attributes:
             return {**my_sensor.attributes}
         return None
 
     async def get_pvpc_buy_attributes(self):
         """Access all attributes of the ESIOS PVPC sensor."""
-        pvpc_sensor = self.hass.states.get(self.pvpc_buy_entity)
+        pvpc_sensor = self._hass.states.get(self.pvpc_buy_entity)
         if pvpc_sensor and pvpc_sensor.attributes:
             # Return only the relevant attributes from the PVPC sensor
             return {key: pvpc_sensor.attributes[key] for key in pvpc_sensor.attributes}
         return None
+    
+    async def get_current_soc(self):
+        """Return the current SoC value from self.battery_soc_sensor=entry.data["battery_soc_sensor"]."""    
+        try:
+            states= self._hass.states.get(self.battery_soc_sensor)
+            self.logger.debug(f"states.state: {states.state}%")
+            self.current_soc = float(states.state)
+            await self.api.set_current_initial_soc(self.current_soc)
+            self.logger.debug(f"Current Soc updated: {self.current_soc}%")
+        except Exception as e:
+            self.logger.debug(f"Error reading battery_soc_sensor: {e}")
+
+        
 
     async def get_esios_sensor_dict(self, esios_sensor_name) -> dict | None:
         """
         Return today's and tomorrow's prices from the PVPC sensor with keys
         price_00h to price_23h and price_next_day_00h to price_next_day_23h.
         """
-        esios_sensor = self.hass.states.get(esios_sensor_name)
+        esios_sensor = self._hass.states.get(esios_sensor_name)
         if esios_sensor and esios_sensor.attributes:
             # Load the desired keys
             desired_keys = await self.pvpc_desired_keys()

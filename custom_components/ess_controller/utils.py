@@ -3,8 +3,18 @@ from homeassistant.core import HomeAssistant
 import homeassistant.helpers.entity_registry as er
 import pandas as pd
 from datetime import datetime, timedelta
+from .const import DOMAIN, TITLE
 
 _LOGGER = logging.getLogger(__name__)
+
+def get_device_info(config_entry):
+    """Return device information to link the entity to a device."""
+    return {
+        "identifiers": {(DOMAIN, config_entry.entry_id)},
+        "name": f"{TITLE}",
+        "manufacturer": "EMG",
+        "model": f"{TITLE}",
+    }
 
 def get_entity_description(hass: HomeAssistant, entity_name: str):
     """Get the entity description from Home Assistant."""
@@ -60,7 +70,10 @@ async def forecast_solar_api_to_dict(forecast_solar_api_data: dict[str, float], 
     # There may be gaps in the date_times
     # There may be more than one prediction for the same date_time as they are delta values
     # Sometimes values for the night are not reported
-
+    if forecast_solar_api_data is None:
+        return None, None
+    if len(forecast_solar_api_data) == 0:
+        return None, None
     df = pd.DataFrame(forecast_solar_api_data.items(), columns=['date', 'value'])
 
     # Group the values by hours calculating the sum of each hour
@@ -167,3 +180,32 @@ def dict_to_markdown_table(data):
         markdown_table += "| " + "  |  ".join(row) + " |\n"
     
     return markdown_table
+
+async def async_get_value_from_store(store,key,default=None):
+    """Load persistent data from storage."""
+    data = await store.async_load()
+
+    # Check if there is data to load
+    if data is None:
+        await async_save_value_to_store(store,key,default)
+        return default
+    # Check if the key is in the data
+    if key not in data:
+        await async_save_value_to_store(store,key,default)
+        return default
+    # Return the value of the key
+    return data[key]
+
+async def async_save_value_to_store(store,key,value):
+    """Save persistent data to storage."""
+    data = await store.async_load()
+
+    # Check if there is data to load
+    if data is None:
+        data = {}
+    
+    # Update the data with the new key-value pair
+    data[key] = value
+
+    # Save the updated data
+    await store.async_save(data)

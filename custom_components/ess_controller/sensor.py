@@ -1,14 +1,8 @@
 from datetime import datetime, timedelta
-import pytz
-import time
 import logging
-from zoneinfo import ZoneInfo
-import asyncio
 from homeassistant.components.sensor import SensorEntity
-from homeassistant.helpers.event import async_track_time_interval
-from homeassistant.core import HomeAssistant
 from homeassistant.components.sensor import SensorDeviceClass
-from .utils import dict_to_markdown_table
+from .utils import get_device_info, dict_to_markdown_table
 
 from .const import DOMAIN, TITLE
 
@@ -74,19 +68,14 @@ async def async_setup_entry(hass, config_entry, async_add_entities):
     name = config_entry.title + " Pulp Results"
     async_add_entities([PulpResultsTextSensor(coordinator, name, config_entry)])
 
+    # Add PulpParametersTextSensor
+    name = config_entry.title + " Pulp Parameters"
+    async_add_entities([PulpParametersTextSensor(coordinator, name, config_entry)])
+
     # Add SetPoint_Sensor
     name = config_entry.title + " Proposed SetPoint"
     async_add_entities([SetPoint_Sensor(coordinator, name, config_entry)])
-    
-def get_device_info(config_entry):
-    """Return device information to link the entity to a device."""
-    return {
-        "identifiers": {(DOMAIN, config_entry.entry_id)},
-        "name": f"{TITLE}",
-        "manufacturer": "EMG",
-        "model": f"{TITLE} Sensor",
-    }       
-
+      
 # Classes linked to the coordinator
 class PVPC_Buy_Sensor(SensorEntity):
     """Representation of a PVPC Buy Sensor."""
@@ -132,6 +121,7 @@ class PVPC_Buy_Sensor(SensorEntity):
         return attributes  
     
     async def async_update(self):
+        """Update the sensor."""
         """Update the sensor."""
         await self._coordinator.async_request_refresh()
         self._state = self._coordinator.current_buy_price
@@ -461,6 +451,25 @@ class MinSoC_Sensor(SensorEntity):
         """Return the unit of measurement of the sensor."""
         return self._attr_unit_of_measurement
     
+    @property    
+    def extra_state_attributes(self):
+        """Return the state attributes of the sensor."""
+        attributes = {}
+        attributes['unit_of_measurement'] = self._attr_unit_of_measurement
+        # Add explanation of current min_soc value in attributes
+        if self._coordinator.user_min_soc is not None:
+            attributes["user_config_min_soc"] = f"{self._coordinator.user_min_soc}%"
+
+        if self._coordinator.current_security_min_soc is not None:
+            attributes["current_security_min_soc"] = f"{self._coordinator.current_security_min_soc}%"
+
+        if self._coordinator.soc_safety_margin is not None:
+            attributes["soc_safety_margin"] = f"{self._coordinator.soc_safety_margin}%"
+
+        attributes["min_soc"] = "max(user, security) + margin"
+
+        return attributes
+    
     async def async_update(self):
         """Update the sensor."""
         await self._coordinator.async_request_refresh()
@@ -764,4 +773,62 @@ class SetPoint_Sensor(SensorEntity):
 
     async def async_added_to_hass(self):
         """When entity is added to hass."""
-        self._coordinator.async_add_listener(self.async_write_ha_state)        
+        self._coordinator.async_add_listener(self.async_write_ha_state)
+
+class PulpParametersTextSensor(SensorEntity):
+    def __init__(self, coordinator, name, config_entry):
+        """Initialize the PulpParametersTextSensor Sensor."""
+        self._coordinator = coordinator
+        self._attr_name = name
+        self._config_entry = config_entry
+        self._attr_unique_id = f"{coordinator.unique_id}_{name}"
+        self._attr_icon = "mdi:information"
+        self._state = None
+        self._attr_extra_state_attributes = None
+    
+    @property
+    def name(self):
+        """Return the name of the sensor."""
+        return self._attr_name
+
+    @property
+    def available(self):
+        """Return if entity is available."""
+        return self._coordinator.last_update_success
+
+    @property
+    def device_info(self):
+        """Return device information to link the entity to a device."""
+        return get_device_info(self._config_entry)        
+
+    @property
+    def state(self):
+        return self._state
+    
+    @property
+    def extra_state_attributes(self):
+        """Return the state attributes of the sensor."""
+        attributes = {}
+        if self._coordinator.pulp_parameters is not None:
+            txt= str(self._coordinator.pulp_parameters)
+            txt= txt.replace("{", "")
+            txt= txt.replace("}", "")
+            txt= txt.replace("'", "")
+            txt= txt.replace(":", "=")
+            txt= txt.replace("],", "]\n\n")
+            txt= txt.replace(", demand", "\n\ndemand")
+            attributes['results'] = txt
+            #attributes['md_table'] = dict_to_markdown_table(self._coordinator.pulp_parameters)
+        else:
+            attributes['results'] = "No data available"
+        return attributes    
+
+    def update(self):
+        if self._coordinator.pulp_parameters is not None:
+            # Trim lengthy results
+            txt= str(self._coordinator.pulp_parameters)
+            if len(txt) > 20:
+                txt= txt[:20] + "..."
+        else:
+            txt = "No data available"
+        self._state = txt.replace("'", '"')

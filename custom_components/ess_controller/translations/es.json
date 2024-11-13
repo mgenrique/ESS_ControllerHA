@@ -11,7 +11,8 @@
           "max_buy_energy_per_period_Wh": "Máxima cantidad de energía que se puede comprar de la red en 1h (Wh).",
           "charge_efficiency": "Eficiencia del proceso de carga de la batería.",
           "discharge_efficiency": "Eficiencia del proceso de descarga de la batería.",
-          "min_soc_percent": "SoC mínimo de la batería deseado para la optimización (%)."
+          "min_soc_percent": "SoC mínimo de la batería deseado para la optimización (%).",
+          "battery_purchase_price": "Precio de compra de la batería (€)."
         }
       },
       "two": {
@@ -74,7 +75,8 @@
           "max_buy_energy_per_period_Wh": "Máxima cantidad de energía que se puede comprar de la red en 1h (Wh).",
           "charge_efficiency": "Eficiencia del proceso de carga de la batería.",
           "discharge_efficiency": "Eficiencia del proceso de descarga de la batería.",
-          "min_soc_percent": "SoC mínimo de la batería deseado para la optimización (%)."
+          "min_soc_percent": "SoC mínimo de la batería deseado para la optimización (%).",
+          "battery_purchase_price": "Precio de compra de la batería (€)."
         }
       },
       "two": {

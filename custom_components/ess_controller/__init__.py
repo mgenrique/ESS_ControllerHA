@@ -9,7 +9,7 @@ from .coordinator import PVControllerUpdateCoordinator as Coordinator
 from .const import DOMAIN
 
 # Define constants
-PLATFORMS: list[Platform] = [Platform.SENSOR]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.NUMBER]
 # PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH, Platform.NUMBER, Platform.SELECT, Platform.BINARY_SENSOR, Platform.BUTTON]
 
 # Define _LOGGER
@@ -27,11 +27,18 @@ async def async_setup_entry(hass: HomeAssistant, config_entry: ConfigEntry) -> b
     # Save the coordinator in the data dictionary
     hass.data.setdefault(DOMAIN, {})[config_entry.entry_id] = coordinator
 
+    # # Default values for input numbers
+    # if "user_soc_safety_margin_initial_value" not in config_entry.data:
+    #     new_data = {**config_entry.data, "user_soc_safety_margin_initial_value": 10}
+    #     hass.config_entries.async_update_entry(config_entry, data=new_data)
+
     # Load the platforms
     await hass.config_entries.async_forward_entry_setups(config_entry, PLATFORMS)
 
     # Add update listener
     config_entry.async_on_unload(config_entry.add_update_listener(update_listener))
+
+    await coordinator.async_initialize() # Read user inputs from store    
 
     return True
 

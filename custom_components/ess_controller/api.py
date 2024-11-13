@@ -4,7 +4,6 @@ import asyncio
 from datetime import datetime, timedelta
 import aiohttp
 import pandas as pd
-from homeassistant.helpers.update_coordinator import UpdateFailed
 import pulp
 from .const import INFLUX_UPDATE_INTERVAL, SOC_PERCENT_DEVIATION_FORCE_RECALC, \
     TARGET_SOC_UPDATE_INTERVAL, HISTORY_SOLAR_MAX_DAYS
@@ -20,8 +19,6 @@ class PVContollerAPI:
                  influx_db_database: str | None = None,
                  acin_to_acout_sensor: str | None = None,
                  inverter_to_acout_sensor: str | None = None,
-                 battery_soc_sensor: str | None = None,
-                 battery_min_soc_overrides_sensor: str | None = None,
                  solar_production_sensor: str | None = None,
                  hystory_forecast_solar_sensor: str | None = None,
                  battery_capacity_Wh: int | None = None,
@@ -30,6 +27,7 @@ class PVContollerAPI:
                  max_buy_energy_per_period_Wh: int | None = None,
                  charge_efficiency: float | None = None,
                  discharge_efficiency: float | None = None,
+                 battery_purchase_price: float | None = 0,
                  str_local_timezone: str | None = None,
                  enable_fore_to_real_correction: bool | None = False,
                  sell_allowed: bool | None = False
@@ -65,8 +63,7 @@ class PVContollerAPI:
         self._solar_production_sensor = solar_production_sensor
         self._hystory_forecast_solar_sensor = hystory_forecast_solar_sensor
         self._inverter_to_acout_sensor = inverter_to_acout_sensor
-        self._battery_soc_sensor = battery_soc_sensor
-        self._battery_min_soc_overrides_sensor = battery_min_soc_overrides_sensor
+
         
         # Photovoltaic installation values
         self._battery_capacity_Wh = battery_capacity_Wh
@@ -75,6 +72,7 @@ class PVContollerAPI:
         self._max_buy_energy_per_period_Wh = max_buy_energy_per_period_Wh
         self._charge_efficiency = charge_efficiency
         self._discharge_efficiency = discharge_efficiency
+        self.battery_purchase_price = battery_purchase_price
 
         # Define internal class values that are calculated        
         self._data_source = "TFG EMG"
@@ -113,6 +111,7 @@ class PVContollerAPI:
         # SoC data
         self._current_initial_soc_Wh = None
         self._current_min_soc_Wh = None
+        self._test_min_soc_Wh = None
 
         # Optimization results        
         self._target_socs_last_update = None
@@ -120,6 +119,7 @@ class PVContollerAPI:
         self.dict_target_socs = None
         self.target_soc_current_hour = None
         self.pulp_json_results = None # for sensor.ess_controller_pulp_results
+        self.pulp_parameters = None # for sensor.ess_controller_pulp_parameters
 
         # Lists for the SoC calculation algorithm
         self._list_buy_prices = None
@@ -415,41 +415,41 @@ class PVContollerAPI:
             _LOGGER.debug("Failed to obtain data from InfluxDB")
             return False            
 
-    async def read_soc_from_influxdb(self) -> float:
-        """Read the state of charge (SoC) from InfluxDB."""
-        # Get the name for the query from self._battery_soc_sensor
-        entity_id = self._battery_soc_sensor.split('.')[1]
+    # async def read_soc_from_influxdb(self) -> float:
+    #     """Read the state of charge (SoC) from InfluxDB."""
+    #     # Get the name for the query from self._battery_soc_sensor
+    #     entity_id = self._battery_soc_sensor.split('.')[1]
         
-        # Create the SQL query to get the last soc value
-        query = """SELECT last("value") AS "soc" FROM "homeassistant"."autogen"."%" WHERE "entity_id"='{}'""".format(entity_id)
+    #     # Create the SQL query to get the last soc value
+    #     query = """SELECT last("value") AS "soc" FROM "homeassistant"."autogen"."%" WHERE "entity_id"='{}'""".format(entity_id)
 
-        # Create a DataFrame with the energy data obtained from InfluxDB
-        df = await self.df_from_influxdb(query)
+    #     # Create a DataFrame with the energy data obtained from InfluxDB
+    #     df = await self.df_from_influxdb(query)
         
-        # If the DataFrame is empty, return None
-        if df.empty:
-            return None
-        else:
-            # Return the soc value
-            return df['soc'].iloc[0]
+    #     # If the DataFrame is empty, return None
+    #     if df.empty:
+    #         return None
+    #     else:
+    #         # Return the soc value
+    #         return df['soc'].iloc[0]
         
-    async def read_minsoc_from_influxdb(self) -> float:
-        """Read the minimum state of charge (minSoC) from InfluxDB."""
-        # Get the name for the query from self._battery_min_soc_overrides_sensor
-        entity_id = self._battery_min_soc_overrides_sensor.split('.')[1]
+    # async def read_minsoc_from_influxdb(self) -> float:
+    #     """Read the minimum state of charge (minSoC) from InfluxDB."""
+    #     # Get the name for the query from self._battery_min_soc_overrides_sensor
+    #     entity_id = self._battery_min_soc_overrides_sensor.split('.')[1]
         
-        # Create the SQL query to get the last minSoC value
-        query = """SELECT last("value") AS "minsoc" FROM "homeassistant"."autogen"."%" WHERE "entity_id"='{}'""".format(entity_id)
+    #     # Create the SQL query to get the last minSoC value
+    #     query = """SELECT last("value") AS "minsoc" FROM "homeassistant"."autogen"."%" WHERE "entity_id"='{}'""".format(entity_id)
 
-        # Create a DataFrame with the energy data obtained from InfluxDB
-        df = await self.df_from_influxdb(query)
+    #     # Create a DataFrame with the energy data obtained from InfluxDB
+    #     df = await self.df_from_influxdb(query)
         
-        # If the DataFrame is empty, return None
-        if df.empty:
-            return None
-        else:
-            # Return the minSoC value
-            return df['minsoc'].iloc[0]
+    #     # If the DataFrame is empty, return None
+    #     if df.empty:
+    #         return 0
+    #     else:
+    #         # Return the minSoC value
+    #         return df['minsoc'].iloc[0]
 
     async def post_energy_query(self, base_url, energy_query_data):
         try:
@@ -736,7 +736,18 @@ class PVContollerAPI:
 
         # Calculate the target SoCs
         _LOGGER.debug(f"Starting PuLP: {datetime.now()}")
-        result = await self.pulp_calculations(current_datetime)
+        # Log the buy prices
+        for i in range(len(self._list_buy_prices)-1):
+            _LOGGER.debug(f"Price {i}:{self._list_buy_prices[i]} €/kWh")
+            if self._list_buy_prices[i] < self._list_buy_prices[i+1]:
+                _LOGGER.debug(f"Price {i} is lower than {i+1}: {self._list_buy_prices[i]} < {self._list_buy_prices[i+1]}")
+            else:
+                _LOGGER.debug(f"Price {i} is greater than {i+1}: {self._list_buy_prices[i]} > {self._list_buy_prices[i+1]}")        
+
+        # We can iterate and test diferents min_soc values
+        self._test_min_soc_Wh = self._current_min_soc_Wh
+        result,objetive = await self.pulp_calculations(current_datetime)
+
         soc = result['SoC(%)']
         soc_len = len(soc)
         current_date = current_datetime.replace(minute=0, second=0, microsecond=0)
@@ -744,7 +755,7 @@ class PVContollerAPI:
         self.dict_target_socs = dict(zip(date_list, soc))
 
         self.target_soc_current_hour = result['SoC(%)'][0]
-        _LOGGER.debug(f"Finishing PuLP: {datetime.now()}")
+        _LOGGER.debug(f"Finishing PuLP: {datetime.now()} with result: {result} and objetive: {objetive}")
 
         # When the target SoCs calculation starts, the value of current_initial_soc_Wh provided
         # by the coordinator is used to perform the calculation and is stored in _last_calc_initial_soc_Wh
@@ -766,17 +777,11 @@ class PVContollerAPI:
         buy_prices = self._list_buy_prices  # Buy prices in €/kWh
         sell_prices = self._list_sell_prices  # Sell prices in €/kWh
 
-        # Log the lists
-        _LOGGER.debug(f"Demand list: {demand}")
-        _LOGGER.debug(f"Solar production list: {solar_production}")
-        _LOGGER.debug(f"Buy prices list: {buy_prices}")
-        _LOGGER.debug(f"Sell prices list: {sell_prices}")
-                
         # Read the current SoC
         initial_soc = self._current_initial_soc_Wh  # Initial state of charge of the battery (Wh)
 
-        # Read the minimum allowed SoC obtained dynamically from InfluxDB
-        min_soc = self._current_min_soc_Wh  # Minimum allowed SoC (Wh)
+        # Use a test min_soc value for the optimization
+        min_soc = self._test_min_soc_Wh # self._current_min_soc_Wh  # Minimum allowed SoC (Wh)
 
         # Photovoltaic installation parameters
         battery_capacity = self._battery_capacity_Wh  # Maximum battery capacity (Wh)
@@ -790,34 +795,51 @@ class PVContollerAPI:
         max_charge_energy_first_period = max_charge_energy_per_period - (current_datetime.minute * max_charge_energy_per_period / 60)
         max_discharge_energy_first_period = max_discharge_energy_per_period - (current_datetime.minute * max_discharge_energy_per_period / 60)
         max_buy_energy_first_period = max_buy_energy_per_period - (current_datetime.minute * max_buy_energy_per_period / 60)
+        demand[0] = demand[0] - (current_datetime.minute * demand[0] / 60)
+        solar_production[0] = solar_production[0] - (current_datetime.minute * solar_production[0] / 60)
 
+        # Battery cost parameters
+        battery_purchase_price = self.battery_purchase_price  # 1000€ ?
+        battery_eol_cycles_if_min_soc_20 = 2500  # cycles
+        battery_eol_cycles_if_min_soc_50 = 5000  # cycles
+        min_soc_percent= min_soc / battery_capacity *100 # %
+        # Linear interpolation between 20% and 50% to estimate the battery lifetime at min_soc_percent
+        battery_eol_cycles_current_min_soc = battery_eol_cycles_if_min_soc_20 + \
+            (battery_eol_cycles_if_min_soc_50 - battery_eol_cycles_if_min_soc_20) * (min_soc_percent - 20) / 30  # cycles
 
-        # Log the parameter values
-        _LOGGER.debug(f"initial_soc: {initial_soc} Wh")
-        _LOGGER.debug(f"battery_capacity: {battery_capacity} Wh")
-        _LOGGER.debug(f"min_soc: {min_soc} Wh")
-        _LOGGER.debug(f"max_charge_energy_per_period: {max_charge_energy_per_period} Wh")
-        _LOGGER.debug(f"max_discharge_energy_per_period: {max_discharge_energy_per_period} Wh")
-        _LOGGER.debug(f"max_buy_energy_per_period: {max_buy_energy_per_period} Wh")
-        _LOGGER.debug(f"charge_efficiency: {charge_efficiency}")
-        _LOGGER.debug(f"discharge_efficiency: {discharge_efficiency}")
-        
+        # Battery energy cost. Only considered when discharging the battery
+        # In its lifetime, the battery can provide:
+        all_live_energy= (battery_eol_cycles_current_min_soc*battery_capacity*(100-min_soc_percent)/100)/1000 # kWh of energy
+        # Therefore, the cost of the energy from battery is battery_purchase_price / all_live_energy €/kWh
+        battery_energy_price = battery_purchase_price / all_live_energy  # €/kWh
+
+        # Number of hours to consider       
         num_hours = min(len(demand), len(solar_production), len(buy_prices), len(sell_prices))
 
         # Sum of demand and solar production
         total_demand = sum(demand)
         total_solar_production = sum(solar_production)
-
+        # Coste bruto de la demanda
+        gross_demand_cost = sum([demand[i]*buy_prices[i] for i in range(num_hours)]) / 1000
         # Average electricity price
         average_price = sum(buy_prices) / num_hours
+
+        # Max electricity price
+        max_price = max(buy_prices)
+        # Min electricity price
+        min_price = min(buy_prices)
+        # get hour at min price
+        min_price_hour = buy_prices.index(min_price)       
 
         # Set the weight we will give in the objective function to maximize the final SoC versus minimizing the cost of purchased energy
         # When solar production is greater than demand, maximizing the SoC will be prioritized
         if total_solar_production >= total_demand:
             w = 2 * average_price / 1000
+            # w = 2 * max_price / 1000
             _LOGGER.debug(f"Solar production covers all demand! w={w}")
         else:
             w = average_price / 1000
+            # w = max_price / 1000
             _LOGGER.debug(f"Solar production does not cover all demand! w={w}")
 
         # NOTE: THE PROBLEM IS SOLVED CORRECTLY EVEN IF initial_soc < min_soc
@@ -825,88 +847,91 @@ class PVContollerAPI:
         # Create the optimization problem
         problem = pulp.LpProblem("Optimal_SOC_with_Cost_Minimization", pulp.LpMinimize)
 
-        # Decision variables: energy bought and SoC of the battery at each hour
-        energy_from_grid = [pulp.LpVariable(f'f_grid_{i}', lowBound=0) for i in range(num_hours)]
+        # Decision variables: energies and SoC of the battery at each hour
+        energy_from_grid = [pulp.LpVariable(f'f_grid_{i}', lowBound=0, upBound=max_buy_energy_per_period) for i in range(num_hours)]
         energy_to_grid = [pulp.LpVariable(f't_grid_{i}', lowBound=0) for i in range(num_hours)]
-        soc = [pulp.LpVariable(f'soc_{i}', lowBound=min_soc, upBound=battery_capacity) for i in range(num_hours)]
+        soc = [pulp.LpVariable(f'soc_{i}', lowBound=0, upBound=battery_capacity) for i in range(num_hours)]
         energy_to_battery = [pulp.LpVariable(f'charge_{i}', lowBound=0, upBound=max_charge_energy_per_period) for i in range(num_hours)]
         energy_from_battery = [pulp.LpVariable(f'discharge_{i}', lowBound=0, upBound=max_discharge_energy_per_period) for i in range(num_hours)]
 
-        # Objective function: minimize the cost of purchased energy while maximizing the final SoC
-        # Prices are in €/kWh and energy in Wh, so we need to divide by 1000
-        buy_cost = pulp.lpSum([(energy_from_grid[i] * buy_prices[i] / 1000 - energy_to_grid[i] * sell_prices[i] / 1000) for i in range(num_hours)])  # Convert prices to €/Wh
-        final_soc = soc[-1]  # The state of charge at the end of the period
-        problem += buy_cost - w * final_soc  # Minimize cost and maximize final SoC, weighting the decision with w (€/Wh that give value to stored energy)
+        # Objective function: minimize the cost of energy and maximize the SoC
+        energy_cost = pulp.lpSum([(energy_from_grid[i] * buy_prices[i] + \
+                                energy_from_battery[i] * battery_energy_price - \
+                                energy_to_grid[i] * sell_prices[i] - \
+                                energy_to_battery[i] * battery_energy_price \
+                                )*(1/1000) \
+                                for i in range(num_hours)])  # Convert prices to €/Wh        
+        final_soc = soc[-1]  # The state of charge in the last period
+        problem += energy_cost - w * final_soc
 
         # CONSTRAINTS
         # Require that the SoC at the last period is greater than the initial SoC.
         # The final SoC could have been set as an input parameter. Consider this in future versions
         problem += soc[-1] >= initial_soc
-
         for i in range(num_hours):
-            # Require that the SoC does not fall below the minimum allowed
-            problem += soc[i] >= min_soc
-
-            # Set the SoC at the end of each period soc[i]: 
             if i == 0:
                 # In the first hour, start from initial_soc and balance
                 problem += soc[i] == initial_soc + energy_to_battery[i] - energy_from_battery[i]
-                # Limit the energy that can enter the battery due to the maximum charging power
+                # Limit the energy that can enter the battery due to the maximum charging power in first period
                 problem += energy_to_battery[i] <= max_charge_energy_first_period
-                # Limit the energy that can leave the battery due to the maximum discharging power
                 problem += energy_from_battery[i] <= max_discharge_energy_first_period
-                # Limit the energy that can be bought from the grid
-                problem += energy_from_grid[i] <= max_buy_energy_first_period                
-
+                problem += energy_from_grid[i] <= max_buy_energy_first_period
+                # How much energy can be sent to the battery in the first period if the initial SoC is less than min_soc?
+                max_energy_available = max(max_buy_energy_first_period + solar_production[0] - demand[0],0)
+                max_energy_to_battery = min(max_charge_energy_first_period, max_energy_available*charge_efficiency)
+                # Try to recover the SoC as quickly as possible if it is below min_soc
+                if initial_soc < min_soc:
+                    problem += soc[i] >= initial_soc + max_energy_to_battery
+                else:
+                    # Require that the SoC does not fall below the minimum allowed
+                    problem += soc[i] >= min_soc      
             else:
                 # In the following hours, the SoC depends on the previous state
                 problem += soc[i] == soc[i - 1] + energy_to_battery[i] - energy_from_battery[i]
-                # Limit the energy that can enter the battery due to the maximum charging power
-                problem += energy_to_battery[i] <= max_charge_energy_per_period
-                # Limit the energy that can leave the battery due to the maximum discharging power
-                problem += energy_from_battery[i] <= max_discharge_energy_per_period
-                # Limit the energy that can be bought from the grid
-                problem += energy_from_grid[i] <= max_buy_energy_per_period                               
-
-            # Require that the energy entering the battery is positive
-            problem += energy_to_battery[i] >= 0
-
-            # Require that the energy leaving the battery is positive
-            problem += energy_from_battery[i] >= 0
+                # Require that the SoC does not fall below the minimum allowed
+                problem += soc[i] >= min_soc        
 
             # Global energy balance
-            problem += demand[i] + pulp.lpSum(energy_to_battery[i]) / charge_efficiency + energy_to_grid[i] == \
-                energy_from_grid[i] + solar_production[i] + pulp.lpSum(energy_from_battery[i]) * discharge_efficiency
-
+            problem += demand[i] + pulp.lpSum(energy_to_battery[i])/charge_efficiency + energy_to_grid[i] == \
+                energy_from_grid[i] + solar_production[i] + pulp.lpSum(energy_from_battery[i]) * discharge_efficiency                  
         try:
             # Run problem.solve() in a separate thread
             await asyncio.to_thread(problem.solve)
         except pulp.PulpSolverError as e:
             _LOGGER.error(f"Error running the PuLP solver: {e}")
-            raise UpdateFailed(f"Error running the PuLP solver: {e}")
+            # raise UpdateFailed(f"Error running the PuLP solver: {e}")
+            return None, None
 
         # Check the solution status
         status = pulp.LpStatus[problem.status]
         _LOGGER.info(f"PuLP solution status: {status}")
 
+        if status != 'Optimal':
+            return None, None
+
+        _LOGGER.info(f"Objective function: {pulp.value(problem.objective):.2f} €")
+
         # Results
         total_grid_cost = 0
         for i in range(num_hours):
-            total_grid_cost += energy_from_grid[i].varValue * buy_prices[i] / 1000 - energy_to_grid[i].varValue * sell_prices[i] / 1000
+            total_grid_cost += energy_from_grid[i].varValue * buy_prices[i] \
+                                - energy_to_grid[i].varValue * sell_prices[i]
+        total_grid_cost = total_grid_cost / 1000  # Convert to € (price is in €/kWh and energy in Wh)
+        total_battery_cost = 0
+        for i in range(num_hours):
+            total_battery_cost += energy_from_battery[i].varValue * battery_energy_price \
+                                - energy_to_battery[i].varValue * battery_energy_price
+        total_battery_cost = total_battery_cost / 1000  # Convert to € (price is in €/kWh and energy in Wh)
 
-        _LOGGER.info(f"Objective function: {pulp.value(problem.objective):.2f} €")
-        _LOGGER.info(f"Final state of charge: {soc[-1].varValue:.2f} Wh")
-        _LOGGER.info(f"Cost of electricity bought from the grid: {total_grid_cost:.2f} €")
-
-        current_date = current_datetime.replace(minute=0, second=0, microsecond=0)
         # Create a dictionary with the results
+        current_date = current_datetime.replace(minute=0, second=0, microsecond=0)
         results = {
             "Hour": [i for i in range(1, num_hours + 1)],
             "System Time": [(current_date + timedelta(hours=i)).strftime("%H:%M") for i in range(num_hours)],
             "buy_price(€/kWh)": buy_prices,
             "sell_price(€/kWh)": sell_prices,
-            "Demand(Wh)": demand,
-            "from_solar(Wh)": solar_production,
+            "Demand(Wh)": [round(demand[i]) for i in range(num_hours)], 
+            "from_solar(Wh)": [round(solar_production[i]) for i in range(num_hours)],
             "from_grid(Wh)": [round(energy_from_grid[i].varValue) for i in range(num_hours)],
             "to_grid(Wh)": [round(energy_to_grid[i].varValue) for i in range(num_hours)],
             "to_battery(Wh)": [round(energy_to_battery[i].varValue) for i in range(num_hours)],
@@ -914,10 +939,37 @@ class PVContollerAPI:
             "SoC(Wh)": [round(soc[i].varValue) for i in range(num_hours)],
             "SoC(%)": [round(soc[i].varValue / battery_capacity * 100) for i in range(num_hours)]
         }
-        self.pulp_json_results = results     
+        results['System Time'][0] = current_datetime.strftime("%H:%M")
+        self.pulp_json_results = results
+
         # Log the results
         _LOGGER.info(f"Results: {results}")
-        return results
+
+        # Make a dictionary with other optimization data for the frontend
+        self.pulp_parameters = {"Status": pulp.LpStatus[problem.status],
+                                "Objective function": pulp.value(problem.objective),
+                                "w": w,
+                                "gross_demand_cost": gross_demand_cost,
+                                "total_grid_cost": total_grid_cost,
+                                "total_battery_cost": total_battery_cost,
+                                "total_cost": total_grid_cost + total_battery_cost,
+                                "total_demand": total_demand,
+                                "total_solar_production": total_solar_production,
+                                "average_price": average_price,
+                                "max_price": max_price,
+                                "min_price": min_price,
+                                "min_price_hour": min_price_hour+1,
+                                "battery_energy_price €/kWh": battery_energy_price, # €/kWh
+                                "initial_soc": initial_soc, 
+                                "min_soc": min_soc, 
+                                "demand": self._list_demand, 
+                                "solar_production": self._list_solar_production, 
+                                "buy_prices": buy_prices, 
+                                "sell_prices": sell_prices
+                                }
+
+
+        return results, pulp.value(problem.objective)
         
     async def make_hourly_df_between_dates(self, start, end, value) -> pd.DataFrame:
         """

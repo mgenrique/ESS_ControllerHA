@@ -49,6 +49,9 @@ HISTORY_SOLAR_MAX_DAYS = 7  # Maximum number of days of solar history to query
 # Constants for the Prophet InfluxDB Addon
 DEFAULT_PROPHET_INFLUXDB_ADDON_URL = "http://localhost:5000"
 
+STORE_FORECAST_SOLAR_GLOBAL_KEY="ess_controller_forecast_solar"
+STORE_USER_INPUT_GLOBAL_KEY="ess_controller_user_inputs"
+
 
 def get_existing_or_default(config_entry, key, default):
     """Get the existing configuration value or the default value."""
@@ -86,7 +89,11 @@ def create_step_one_schema(config_entry=None):
         vol.Required("min_soc_percent", default=get_existing_or_default(config_entry, "min_soc_percent", DEFAULT_MIN_SOC_PERCENT)): vol.All(
             vol.Coerce(int),
             vol.Range(min=1, max=100, msg="The value must be between 1 and 100")
-        )   
+        ),
+        vol.Required("battery_purchase_price", default=get_existing_or_default(config_entry, "battery_purchase_price", 0)): vol.All(
+            vol.Coerce(int),
+            vol.Range(min=0, msg="The value must be a positive integer")
+        )             
     })
 
 def create_step_two_schema(config_entry=None):

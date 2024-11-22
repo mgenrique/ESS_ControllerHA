@@ -17,6 +17,6 @@ With this information, the Modbus connection with the inverter is used to mainta
 ## Important information for installation
 The first version of this component has been developed in Ubuntu on a Home Assistant Core installation running in a Python 3.12 virtual environment.
 In Ubuntu the Prophet library is not a problem since it is possible to install it. However in Home Assistant OS, it is not possible to have this library since the OS is a minimal system based on Alpine.
-In this new version Prophet runs in a Docker container, using the Prophet InfluxDB Addon installation found at https://github.com/mgenrique/hassos_prophet_addon/tree/main/prophet-influx-multi-addon
-This integration requires the installation of the Prophet InfluxDB Addon which can be found at 
+
+In this new version Prophet runs in a Docker container, using the Prophet InfluxDB Addon installation found at 
 [https://github.com/mgenrique/hassos_prophet_addon/tree/main/prophet-influx-multi-addon](https://github.com/mgenrique/hassos_prophet_addon/tree/main/prophet-influx-multi-addon)

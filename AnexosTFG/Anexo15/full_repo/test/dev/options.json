@@ -1,0 +1,7 @@
+{
+  "INFLUXDB_HOST": "a0d7b954-influxdb",
+  "INFLUXDB_PORT": 8086,
+  "INFLUXDB_USER": "homeassistant",
+  "INFLUXDB_PASSWORD": "xxx",
+  "INFLUXDB_DBNAME": "homeassistant"
+}

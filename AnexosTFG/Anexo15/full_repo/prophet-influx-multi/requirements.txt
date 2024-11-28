@@ -1,0 +1,7 @@
+fastapi
+pydantic
+prophet
+numpy
+pandas
+influxdb
+uvicorn

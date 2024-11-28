@@ -1,0 +1,27 @@
+{
+  "name": "Prophet InfluxDB Addon",
+  "version": "1.0",
+  "slug": "prophet_influxdb_addon",
+  "description": "Addon to run Prophet forecasting with InfluxDB data",
+  "arch": ["amd64", "aarch64"],
+  "startup": "services",
+  "boot": "auto",
+  "options": {
+    "INFLUXDB_HOST": "InfluxAddon host_name or external IP, examples: a0d7b954-influxdb or 192.168.0.100",
+    "INFLUXDB_PORT": 8086,
+    "INFLUXDB_USER": "homeassistant",
+    "INFLUXDB_PASSWORD": "",
+    "INFLUXDB_DBNAME": "homeassistant"
+  },
+  "schema": {
+    "INFLUXDB_HOST": "str",
+    "INFLUXDB_PORT": "int",
+    "INFLUXDB_USER": "str",
+    "INFLUXDB_PASSWORD": "str",
+    "INFLUXDB_DBNAME": "str"
+  },
+  "ports": {
+    "5000/tcp": 5000
+  },
+  "map": ["config:rw"]  
+}

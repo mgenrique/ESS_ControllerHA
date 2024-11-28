@@ -1,0 +1,6 @@
+{
+  "name": "HassOS Prophet Addons",
+  "description": "Docker container to run Prophet forecasting in Raspberry Pi/Arm devices",
+  "url": "https://github.com/mgenrique/hassos_prophet_addon",
+  "maintainer": "mgenrique"
+}

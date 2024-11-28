@@ -1,0 +1,6 @@
+Link,bus0,bus1,type,carrier,efficiency,active,build_year,lifetime,p_nom,p_nom_mod,p_nom_extendable,p_nom_min,p_nom_max,p_set,p_min_pu,p_max_pu,capital_cost,marginal_cost,marginal_cost_quadratic,stand_by_cost,length,terrain_factor,committable,start_up_cost,shut_down_cost,min_up_time,min_down_time,up_time_before,down_time_before,ramp_limit_up,ramp_limit_down,ramp_limit_start_up,ramp_limit_shut_down,p_nom_opt
+contactor,grid_ac_bus,house_ac_bus,,,1.0,True,0,inf,10.0,0.0,False,0.0,inf,0.0,-1.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,False,0.0,0.0,0,0,1,0,,,1.0,1.0,0.0
+inverter_to_consumers,bat_dc_bus,house_ac_bus,,,0.94,True,0,inf,3.0,0.0,False,0.0,inf,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,False,0.0,0.0,0,0,1,0,,,1.0,1.0,0.0
+inverter_to_grid,bat_dc_bus,grid_ac_bus,,,0.94,True,0,inf,3.0,0.0,False,0.0,inf,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,False,0.0,0.0,0,0,1,0,,,1.0,1.0,0.0
+ac_dc_charger,grid_ac_bus,bat_dc_bus,,,0.9,True,0,inf,1.75,0.0,False,0.0,inf,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,False,0.0,0.0,0,0,1,0,,,1.0,1.0,0.0
+solar_dc_dc_charger,solar_dc_bus,bat_dc_bus,,,0.99,True,0,inf,2.0,0.0,False,0.0,inf,0.0,0.0,1.0,0.0,0.0,0.0,0.0,0.0,1.0,False,0.0,0.0,0,0,1,0,,,1.0,1.0,0.0

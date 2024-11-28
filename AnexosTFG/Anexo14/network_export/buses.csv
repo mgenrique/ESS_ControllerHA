@@ -1,0 +1,5 @@
+Bus,v_nom,type,x,y,carrier,unit,v_mag_pu_set,v_mag_pu_min,v_mag_pu_max,control,generator,sub_network
+grid_ac_bus,230.0,,320,600,AC,,1.0,0.0,inf,PQ,,
+house_ac_bus,230.0,,640,360,AC,,1.0,0.0,inf,PQ,,
+bat_dc_bus,25.6,,460,165,DC,,1.0,0.0,inf,PQ,,
+solar_dc_bus,150.0,,660,300,DC,,1.0,0.0,inf,PQ,,

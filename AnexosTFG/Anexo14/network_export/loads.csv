@@ -1,0 +1,2 @@
+Load,bus,carrier,type,p_set,q_set,sign,active
+house_load,house_ac_bus,AC,,3.0,0.0,-1.0,True
